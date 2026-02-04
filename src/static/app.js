@@ -4,12 +4,67 @@ document.addEventListener("DOMContentLoaded", () => {
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
 
+  // Function to attach event listeners to remove buttons
+  function attachRemoveListeners(activityCard) {
+    const removeButtons = activityCard.querySelectorAll('.remove-btn');
+    removeButtons.forEach(button => {
+      button.addEventListener('click', async (event) => {
+        const email = event.target.dataset.email;
+        const activity = event.target.dataset.activity;
+
+        try {
+          const response = await fetch(
+            `/activities/${encodeURIComponent(activity)}/remove?email=${encodeURIComponent(email)}`,
+            {
+              method: "DELETE",
+            }
+          );
+
+          const result = await response.json();
+
+          if (response.ok) {
+            messageDiv.textContent = result.message;
+            messageDiv.className = "success";
+
+            // Update the activity card
+            const updatedDetails = {
+              ...JSON.parse(activityCard.dataset.activityDetails),
+              participants: JSON.parse(activityCard.dataset.activityDetails).participants.filter(p => p !== email)
+            };
+            updateActivityCard(activityCard, updatedDetails);
+            activityCard.dataset.activityDetails = JSON.stringify(updatedDetails);
+          } else {
+            messageDiv.textContent = result.detail || "An error occurred";
+            messageDiv.className = "error";
+          }
+
+          messageDiv.classList.remove("hidden");
+
+          // Hide message after 5 seconds
+          setTimeout(() => {
+            messageDiv.classList.add("hidden");
+          }, 5000);
+        } catch (error) {
+          messageDiv.textContent = "Failed to remove participant. Please try again.";
+          messageDiv.className = "error";
+          messageDiv.classList.remove("hidden");
+          setTimeout(() => {
+            messageDiv.classList.add("hidden");
+          }, 5000);
+          console.error("Error removing participant:", error);
+        }
+      });
+    });
+  }
+
   // Function to update activity card with new participant
   function updateActivityCard(activityCard, details) {
     const spotsLeft = details.max_participants - details.participants.length;
     activityCard.querySelector('p:nth-of-type(3)').innerHTML = `<strong>Availability:</strong> ${spotsLeft} spots left`;
     const participantsList = activityCard.querySelector('.participants ul');
-    participantsList.innerHTML = details.participants.map(participant => `<li>${participant}</li>`).join('');
+    participantsList.innerHTML = details.participants.map(participant => `<li>${participant} <button class="remove-btn" data-email="${participant}" data-activity="${activityCard.dataset.activityName}">X</button></li>`).join('');
+    // Re-attach event listeners for remove buttons
+    attachRemoveListeners(activityCard);
   }
 
   // Function to fetch activities from API
@@ -34,12 +89,15 @@ document.addEventListener("DOMContentLoaded", () => {
           <div class="participants">
             <strong>Participants:</strong>
             <ul>
-              ${details.participants.map(participant => `<li>${participant}</li>`).join('')}
+              ${details.participants.map(participant => `<li>${participant} <button class="remove-btn" data-email="${participant}" data-activity="${name}">X</button></li>`).join('')}
             </ul>
           </div>
         `;
 
         activitiesList.appendChild(activityCard);
+
+        // Attach event listeners to remove buttons
+        attachRemoveListeners(activityCard);
 
         // Add option to select dropdown
         const option = document.createElement("option");
@@ -82,10 +140,11 @@ document.addEventListener("DOMContentLoaded", () => {
         // Update the corresponding activity card
         const activityCard = Array.from(activitiesList.children).find(card => card.querySelector('h4').textContent === activity);
         if (activityCard) {
-          // Fetch updated details directly from the activities list
+          // Update the stored details by adding the new participant
+          const currentDetails = JSON.parse(activityCard.dataset.activityDetails);
           const updatedDetails = {
-            ...JSON.parse(activityCard.dataset.activityDetails),
-            participants: [...activityCard.querySelectorAll('.participants li')].map(li => li.textContent).concat(email)
+            ...currentDetails,
+            participants: [...currentDetails.participants, email]
           };
           updateActivityCard(activityCard, updatedDetails);
           activityCard.dataset.activityDetails = JSON.stringify(updatedDetails); // Update stored details
