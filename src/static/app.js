@@ -4,6 +4,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
 
+  // Function to update activity card with new participant
+  function updateActivityCard(activityCard, details) {
+    const spotsLeft = details.max_participants - details.participants.length;
+    activityCard.querySelector('p:nth-of-type(3)').innerHTML = `<strong>Availability:</strong> ${spotsLeft} spots left`;
+    const participantsList = activityCard.querySelector('.participants ul');
+    participantsList.innerHTML = details.participants.map(participant => `<li>${participant}</li>`).join('');
+  }
+
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
@@ -18,13 +26,17 @@ document.addEventListener("DOMContentLoaded", () => {
         const activityCard = document.createElement("div");
         activityCard.className = "activity-card";
 
-        const spotsLeft = details.max_participants - details.participants.length;
-
         activityCard.innerHTML = `
           <h4>${name}</h4>
           <p>${details.description}</p>
           <p><strong>Schedule:</strong> ${details.schedule}</p>
-          <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
+          <p><strong>Availability:</strong> ${details.max_participants - details.participants.length} spots left</p>
+          <div class="participants">
+            <strong>Participants:</strong>
+            <ul>
+              ${details.participants.map(participant => `<li>${participant}</li>`).join('')}
+            </ul>
+          </div>
         `;
 
         activitiesList.appendChild(activityCard);
@@ -34,6 +46,10 @@ document.addEventListener("DOMContentLoaded", () => {
         option.value = name;
         option.textContent = name;
         activitySelect.appendChild(option);
+
+        // Store reference to the activity card for later updates
+        activityCard.dataset.activityName = name;
+        activityCard.dataset.activityDetails = JSON.stringify(details);
       });
     } catch (error) {
       activitiesList.innerHTML = "<p>Failed to load activities. Please try again later.</p>";
@@ -62,6 +78,18 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+
+        // Update the corresponding activity card
+        const activityCard = Array.from(activitiesList.children).find(card => card.querySelector('h4').textContent === activity);
+        if (activityCard) {
+          // Fetch updated details directly from the activities list
+          const updatedDetails = {
+            ...JSON.parse(activityCard.dataset.activityDetails),
+            participants: [...activityCard.querySelectorAll('.participants li')].map(li => li.textContent).concat(email)
+          };
+          updateActivityCard(activityCard, updatedDetails);
+          activityCard.dataset.activityDetails = JSON.stringify(updatedDetails); // Update stored details
+        }
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
